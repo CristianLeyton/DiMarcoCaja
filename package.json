@@ -1,0 +1,26 @@
+{
+  "name": "dimarcocaja",
+  "version": "1.0.0",
+  "description": "app para ver la caja del dia",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:css": "tailwindcss -i ./styles.css -o ./src/output.css --watch",
+    "dev": "concurrently \"npm run build:css\" \"electron .\""
+  },
+  "author": "cdl",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.17",
+    "concurrently": "^8.2.2",
+    "electron": "^36.1.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "html2pdf.js": "^0.10.3",
+    "node-firebird": "^1.1.9",
+    "xlsx": "^0.18.5"
+  }
+}

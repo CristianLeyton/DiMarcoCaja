@@ -245,9 +245,9 @@ ORDER BY m.FECHA ASC
 
     // Combinar totales
     const totales = {
-      TOTAL_EFECTIVO: (totalesVentas[0]?.TOTAL_EFECTIVO || 0) + (totalesRecibos[0]?.TOTAL_EFECTIVO || 0),
-      TOTAL_CTACTE: (totalesVentas[0]?.TOTAL_CTACTE || 0) + (totalesRecibos[0]?.TOTAL_CTACTE || 0),
-      TOTAL_TARJETAS: (totalesVentas[0]?.TOTAL_TARJETAS || 0) + (totalesRecibos[0]?.TOTAL_TARJETAS || 0),
+      TOTAL_EFECTIVO: (totalesVentas[0]?.TOTAL_EFECTIVO || 0),
+      TOTAL_CTACTE: (totalesVentas[0]?.TOTAL_CTACTE || 0),
+      TOTAL_TARJETAS: (totalesVentas[0]?.TOTAL_TARJETAS),
       TOTAL_RECIBOS: totalesRecibos[0]?.TOTAL_RECIBOS || 0
     };
 
@@ -275,9 +275,31 @@ ORDER BY m.FECHA ASC
   }
 });
 
+// Función reutilizable
+async function obtenerNombreFarmacia() {
+  const resultado = await query('SELECT VALOR FROM WFCFG WHERE ID = 202');
+  return resultado[0]?.VALOR || 'Sin nombre';
+}
+
+// Manejador principal
+ipcMain.handle('get-nombre-farmacia', async () => {
+  try {
+    const nombreFarmacia = await obtenerNombreFarmacia();
+    console.log('Farmacia: ', nombreFarmacia);
+    return nombreFarmacia;
+  } catch (error) {
+    console.error('Error al obtener el nombre de la farmacia:', error);
+    throw error;
+  }
+});
+
 // Manejador para exportar a Excel
 ipcMain.handle('exportar-excel', async (event, { fechaInicio, fechaFin }) => {
   try {
+
+    let nombreFarmacia = await obtenerNombreFarmacia();
+    nombreFarmacia = nombreFarmacia.trim();
+
     // Formatear fecha para el nombre del archivo
     const formatearFechaArchivo = (fecha) => {
       const d = new Date(fecha);
@@ -286,7 +308,7 @@ ipcMain.handle('exportar-excel', async (event, { fechaInicio, fechaFin }) => {
 
     const { filePath } = await dialog.showSaveDialog({
       title: 'Guardar archivo Excel',
-      defaultPath: path.join(app.getPath('documents'), `informe-caja_${formatearFechaArchivo(fechaInicio)}_${formatearFechaArchivo(fechaFin)}.xlsx`),
+      defaultPath: path.join(app.getPath('documents'), `informe-caja_${nombreFarmacia}_${formatearFechaArchivo(fechaInicio)}_${formatearFechaArchivo(fechaFin)}.xlsx`),
       filters: [
         { name: 'Excel Files', extensions: ['xlsx'] }
       ]
@@ -411,9 +433,9 @@ ORDER BY m.FECHA ASC;
 
     // Combinar totales
     const totales = {
-      TOTAL_EFECTIVO: (datos[0]?.TOTAL_EFECTIVO || 0) + (recibos[0]?.TOTAL_EFECTIVO || 0),
-      TOTAL_CTACTE: (datos[0]?.TOTAL_CTACTE || 0) + (recibos[0]?.TOTAL_CTACTE || 0),
-      TOTAL_TARJETAS: (datos[0]?.TOTAL_TARJETAS || 0) + (recibos[0]?.TOTAL_TARJETAS || 0),
+      TOTAL_EFECTIVO: (datos[0]?.TOTAL_EFECTIVO || 0),
+      TOTAL_CTACTE: (datos[0]?.TOTAL_CTACTE || 0),
+      TOTAL_TARJETAS: (datos[0]?.TOTAL_TARJETAS || 0),
       TOTAL_RECIBOS: recibos[0]?.TOTAL_RECIBOS || 0
     };
 
@@ -430,7 +452,7 @@ ORDER BY m.FECHA ASC;
 
     // Crear el archivo Excel
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Informe de Caja');
+    const worksheet = workbook.addWorksheet('Informe de Caja - ' + nombreFarmacia);
 
     // Establecer anchos de columna
     worksheet.columns = [
@@ -443,7 +465,7 @@ ORDER BY m.FECHA ASC;
     // Título
     worksheet.mergeCells('A1:D1');
     const titulo = worksheet.getCell('A1');
-    titulo.value = 'INFORME DE CAJA';
+    titulo.value = 'INFORME DE CAJA - ' + nombreFarmacia;
     titulo.font = { size: 16, bold: true };
     titulo.alignment = { horizontal: 'center' };
 

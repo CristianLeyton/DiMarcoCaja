@@ -14,6 +14,7 @@ const tablaTarjetas = document.getElementById('tablaTarjetas');
 const tablaMovimientos = document.getElementById('tablaMovimientos');
 const totalEfectivoEnCaja = document.getElementById('totalEfectivoEnCaja');
 const periodo = document.getElementById('periodo');
+const nombreFarmacia = document.getElementById('nombreFarmacia');
 
 // Función para formatear números como moneda
 function formatearMoneda(valor) {
@@ -41,8 +42,8 @@ function actualizarTablaTarjetas(tarjetas) {
   tarjetas.forEach(tarjeta => {
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${tarjeta.DESCRIPCION.trim()}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatearMoneda(tarjeta.NETO)}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${tarjeta.DESCRIPCION.trim()}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${formatearMoneda(tarjeta.NETO)}</td>
     `;
     tablaTarjetas.appendChild(row);
   });
@@ -58,20 +59,20 @@ function actualizarTablaMovimientos(movimientos) {
 
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatearFecha(mov.FECHA)}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${mov.TIPO_MOVIMIENTO.trim()}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatearMoneda(mov.IMPORTE)}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${mov.MOTIVO || ''}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${formatearFecha(mov.FECHA)}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${mov.TIPO_MOVIMIENTO.trim()}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${formatearMoneda(mov.IMPORTE)}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${mov.MOTIVO || ''}</td>
     `;
     tablaMovimientos.appendChild(row);
   });
 
   const rowFinal = document.createElement('tr');
   rowFinal.innerHTML = `
-    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">Total movimientos caja:</td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">${formatearMoneda(total)}</td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
+    <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs font-bold text-gray-900">Total movimientos caja:</td>
+    <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900"></td>
+    <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs font-bold text-gray-900">${formatearMoneda(total)}</td>
+    <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900"></td>
   `;
   tablaMovimientos.appendChild(rowFinal);
 }
@@ -114,27 +115,44 @@ async function cargarDatos() {
       fechaFin: fechaFinValor
     });
 
+    // Usar valores por defecto en caso de que alguna propiedad no exista
+    const totalEfectivoVal = datos.totales?.TOTAL_EFECTIVO ?? 0;
+    const totalCtaCteVal = datos.totales?.TOTAL_CTACTE ?? 0;
+    const totalTarjetasVal = datos.totales?.TOTAL_TARJETAS ?? 0;
+    const totalRecibosVal = datos.totales?.TOTAL_RECIBOS ?? 0;
+    const totalMovCaja = datos.movimientos?.[datos.movimientos.length - 1]?.TOTAL_GENERAL ?? 0;
+
     // Actualizar totales
-    totalEfectivo.textContent = formatearMoneda(datos.totales.TOTAL_EFECTIVO);
-    totalCtaCte.textContent = formatearMoneda(datos.totales.TOTAL_CTACTE);
-    totalTarjetas.textContent = formatearMoneda(datos.totales.TOTAL_TARJETAS);
-    totalRecibos.textContent = formatearMoneda(datos.totales.TOTAL_RECIBOS);
-    totalEfectivoEnCaja.textContent = formatearMoneda(datos.totales.TOTAL_EFECTIVO + datos.totales.TOTAL_RECIBOS + datos.movimientos[datos.movimientos.length - 1].TOTAL_GENERAL);
+    totalEfectivo.textContent = formatearMoneda(totalEfectivoVal);
+    totalCtaCte.textContent = formatearMoneda(totalCtaCteVal);
+    totalTarjetas.textContent = formatearMoneda(totalTarjetasVal);
+    totalRecibos.textContent = formatearMoneda(totalRecibosVal);
+    totalEfectivoEnCaja.textContent = formatearMoneda(totalEfectivoVal + totalRecibosVal + totalMovCaja);
 
     // Actualizar tablas
-    actualizarTablaTarjetas(datos.tarjetas);
-    actualizarTablaMovimientos(datos.movimientos);
+    actualizarTablaTarjetas(datos.tarjetas ?? []);
+    actualizarTablaMovimientos(datos.movimientos ?? []);
 
     // Actualizar periodo
-    periodo.textContent = `${formatearFecha(fechaInicio.value)}hs - ${formatearFecha(fechaFin.value)}hs`;
+    periodo.textContent = `${formatearFecha(fechaInicioValor)}hs - ${formatearFecha(fechaFinValor)}hs`;
   } catch (error) {
     console.error('Error al cargar datos:', error);
-    alert('Error al cargar los datos. Por favor, intente nuevamente.');
+    alert('Error al cargar los datos. Por favor, revise las fechas seleccionadas.');
   }
 }
 
+
 // Event listeners
 btnFiltrar.addEventListener('click', cargarDatos);
+// Ejecutar con Enter en inputs de fecha
+[fechaInicio, fechaFin].forEach(input => {
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault(); // Previene comportamientos inesperados
+      cargarDatos();
+    }
+  });
+});
 btnExportarExcel.addEventListener('click', exportarExcel);
 btnImprimir.addEventListener('click', imprimir);
 
@@ -155,6 +173,11 @@ function formatearFechaInput(fecha) {
 
 fechaInicio.value = formatearFechaInput(inicioHoy);
 fechaFin.value = formatearFechaInput(finHoy);
+
+// Cargar nombre de la farmacia
+ipcRenderer.invoke('get-nombre-farmacia').then(nombre => {
+  nombreFarmacia.textContent = nombre;
+});
 
 // Cargar datos iniciales
 cargarDatos();

@@ -162,9 +162,9 @@ ipcMain.handle('get-totales', async (event, { fechaInicio, fechaFin }) => {
     const sqlTarjetas = `SELECT
     TARJ.ID AS TARJETA_ID,
     TARJ.DESCRIPCION,
-    COALESCE(SUM(FAC.TOTALCLIENTE), 0) AS TOTAL_VENTAS,
+    COALESCE(SUM(FAC.TOTALCUPONES), 0) AS TOTAL_VENTAS,
     COALESCE(SUM(NC.TOTAL_NC), 0) AS TOTAL_NC,
-    COALESCE(SUM(FAC.TOTALCLIENTE), 0) - COALESCE(SUM(NC.TOTAL_NC), 0) AS NETO
+    COALESCE(SUM(FAC.TOTALCUPONES), 0) - COALESCE(SUM(NC.TOTAL_NC), 0) AS NETO
 FROM TARJ_MAESTRO TARJ
 LEFT JOIN FAC_MAESTRO FAC ON FAC.TARJETA = TARJ.ID
     AND FAC.FECHA BETWEEN ? AND ?
@@ -248,19 +248,36 @@ ORDER BY m.FECHA ASC
       TOTAL_EFECTIVO: (totalesVentas[0]?.TOTAL_EFECTIVO || 0),
       TOTAL_CTACTE: (totalesVentas[0]?.TOTAL_CTACTE || 0),
       TOTAL_TARJETAS: (totalesVentas[0]?.TOTAL_TARJETAS),
+      TOTAL_RECIBOS_EFECTIVO: totalesRecibos[0]?.TOTAL_EFECTIVO || 0,
+      TOTAL_RECIBOS_TARJETAS: totalesRecibos[0]?.TOTAL_TARJETAS || 0,
       TOTAL_RECIBOS: totalesRecibos[0]?.TOTAL_RECIBOS || 0
     };
 
-    // Combinar tarjetas
-    const tarjetas = [...tarjetasVentas, ...tarjetasRecibos].reduce((acc, curr) => {
-      const existing = acc.find(t => t.DESCRIPCION === curr.DESCRIPCION);
-      if (existing) {
-        existing.TOTAL += curr.TOTAL;
+    const tarjetas = [...tarjetasVentas].map(t => ({
+      ...t,
+      DESCRIPCION: t.DESCRIPCION.trim(),
+      TOTAL: t.NETO, // mantenemos este como valor base
+      TOTAL_CON_RECIBOS: t.NETO // inicializamos con el NETO
+    }));
+    
+    tarjetasRecibos.forEach(recibo => {
+      const descripcion = recibo.DESCRIPCION.trim();
+      const existente = tarjetas.find(t => t.DESCRIPCION === descripcion);
+    
+      if (existente) {
+        existente.TOTAL_CON_RECIBOS += recibo.TOTAL;
       } else {
-        acc.push(curr);
+        tarjetas.push({
+          TARJETA_ID: null,
+          DESCRIPCION: descripcion,
+          TOTAL_VENTAS: 0,
+          TOTAL_NC: 0,
+          NETO: 0,
+          TOTAL: 0,
+          TOTAL_CON_RECIBOS: recibo.TOTAL
+        });
       }
-      return acc;
-    }, []);
+    });
 
     console.log('Resultados:', { totales, tarjetas, movimientos });
 
@@ -308,7 +325,7 @@ ipcMain.handle('exportar-excel', async (event, { fechaInicio, fechaFin }) => {
 
     const { filePath } = await dialog.showSaveDialog({
       title: 'Guardar archivo Excel',
-      defaultPath: path.join(app.getPath('documents'), `informe-caja_${nombreFarmacia}_${formatearFechaArchivo(fechaInicio)}_${formatearFechaArchivo(fechaFin)}.xlsx`),
+      defaultPath: path.join(app.getPath('documents'), `Informe-caja_${nombreFarmacia}_${formatearFechaArchivo(fechaInicio)}_${formatearFechaArchivo(fechaFin)}.xlsx`),
       filters: [
         { name: 'Excel Files', extensions: ['xlsx'] }
       ]
@@ -363,9 +380,9 @@ ipcMain.handle('exportar-excel', async (event, { fechaInicio, fechaFin }) => {
     const tarjetas = await query(`SELECT
     TARJ.ID AS TARJETA_ID,
     TARJ.DESCRIPCION,
-    COALESCE(SUM(FAC.TOTALCLIENTE), 0) AS TOTAL_VENTAS,
+    COALESCE(SUM(FAC.TOTALCUPONES), 0) AS TOTAL_VENTAS,
     COALESCE(SUM(NC.TOTAL_NC), 0) AS TOTAL_NC,
-    COALESCE(SUM(FAC.TOTALCLIENTE), 0) - COALESCE(SUM(NC.TOTAL_NC), 0) AS NETO
+    COALESCE(SUM(FAC.TOTALCUPONES), 0) - COALESCE(SUM(NC.TOTAL_NC), 0) AS NETO
 FROM TARJ_MAESTRO TARJ
 LEFT JOIN FAC_MAESTRO FAC ON FAC.TARJETA = TARJ.ID
     AND FAC.FECHA BETWEEN ? AND ?
@@ -436,19 +453,38 @@ ORDER BY m.FECHA ASC;
       TOTAL_EFECTIVO: (datos[0]?.TOTAL_EFECTIVO || 0),
       TOTAL_CTACTE: (datos[0]?.TOTAL_CTACTE || 0),
       TOTAL_TARJETAS: (datos[0]?.TOTAL_TARJETAS || 0),
+      TOTAL_RECIBOS_EFECTIVO: recibos[0]?.TOTAL_EFECTIVO || 0,
+      TOTAL_RECIBOS_TARJETAS: recibos[0]?.TOTAL_TARJETAS || 0,
       TOTAL_RECIBOS: recibos[0]?.TOTAL_RECIBOS || 0
     };
 
-    // Combinar tarjetas
-    const todasTarjetas = [...tarjetas, ...tarjetasRecibos].reduce((acc, curr) => {
-      const existing = acc.find(t => t.DESCRIPCION === curr.DESCRIPCION);
-      if (existing) {
-        existing.TOTAL += curr.TOTAL;
-      } else {
-        acc.push(curr);
-      }
-      return acc;
-    }, []);
+// Primero, actualizamos los datos de tarjetas con los recibos
+tarjetasRecibos.forEach(recibo => {
+  const descripcion = recibo.DESCRIPCION.trim();
+  const existente = tarjetas.find(t => t.DESCRIPCION.trim() === descripcion);
+  
+  if (existente) {
+    existente.TOTAL_CON_RECIBOS = (existente.TOTAL_CON_RECIBOS || existente.NETO) + recibo.TOTAL;
+  } else {
+    tarjetas.push({
+      TARJETA_ID: null,
+      DESCRIPCION: descripcion,
+      TOTAL_VENTAS: 0,
+      TOTAL_NC: 0,
+      NETO: 0,
+      TOTAL: 0,
+      TOTAL_CON_RECIBOS: recibo.TOTAL
+    });
+  }
+});
+
+// Luego, generamos la lista final para imprimir
+const todasTarjetas = tarjetas.map(t => ({
+  ...t,
+  DESCRIPCION: t.DESCRIPCION.trim(),
+  TOTAL: t.NETO,
+  TOTAL_CON_RECIBOS: t.TOTAL_CON_RECIBOS ?? t.NETO
+}));
 
     // Crear el archivo Excel
     const workbook = new ExcelJS.Workbook();
@@ -482,8 +518,10 @@ ORDER BY m.FECHA ASC;
     // Totales
     worksheet.addRow(['RESUMEN DE TOTALES', '', '', '']);
     worksheet.addRow(['Total ventas Efectivo', '', formatearMoneda(totales.TOTAL_EFECTIVO)], '');
-    worksheet.addRow(['Total ventas Cuenta Corriente', '', formatearMoneda(totales.TOTAL_CTACTE)], '');
     worksheet.addRow(['Total ventas Tarjetas', '', formatearMoneda(totales.TOTAL_TARJETAS)], '');
+    worksheet.addRow(['Total ventas Cuenta Corriente', '', formatearMoneda(totales.TOTAL_CTACTE)], '');
+    worksheet.addRow(['Total Recibos Efectivo', '', formatearMoneda(totales.TOTAL_RECIBOS_EFECTIVO)], '');
+    worksheet.addRow(['Total Recibos Tarjetas', '', formatearMoneda(totales.TOTAL_RECIBOS_TARJETAS)], '');
     worksheet.addRow(['Total Recibos', '', formatearMoneda(totales.TOTAL_RECIBOS)], '');
 
     // Espacio
@@ -492,7 +530,7 @@ ORDER BY m.FECHA ASC;
     // Detalle de Tarjetas
     worksheet.addRow(['DETALLE DE TARJETAS', '', '', '']);
     todasTarjetas.forEach(tarjeta => {
-      worksheet.addRow([tarjeta.DESCRIPCION.trim(), '', formatearMoneda(tarjeta.NETO)], '');
+      worksheet.addRow([tarjeta.DESCRIPCION.trim(), '', formatearMoneda(tarjeta.TOTAL_CON_RECIBOS)], '');
     });
 
     // Espacio
@@ -524,17 +562,17 @@ ORDER BY m.FECHA ASC;
     worksheet.addRow([]);   
 
     // Suma de efectivo
-    worksheet.addRow(['TOTAL EFECTIVO EN CAJA', '', formatearMoneda(totales.TOTAL_EFECTIVO + totales.TOTAL_RECIBOS + movimientos[movimientos.length - 1].TOTAL_GENERAL)], '');
+    worksheet.addRow(['TOTAL EFECTIVO EN CAJA', '', formatearMoneda(totales.TOTAL_EFECTIVO + totales.TOTAL_RECIBOS_EFECTIVO + movimientos[movimientos.length - 1].TOTAL_GENERAL)], '');
 
     // Estilo para los encabezados
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(2).font = { bold: true };
     worksheet.getRow(4).font = { bold: true };
-    worksheet.getRow(10).font = { bold: true };
-    worksheet.getRow(14 + todasTarjetas.length).font = { bold: true };
-    worksheet.getRow(15 + todasTarjetas.length).font = { bold: true };
-    worksheet.getRow(15 + todasTarjetas.length + movimientos.length + 1).font = { bold: true };
-    worksheet.getRow(18 + todasTarjetas.length + movimientos.length + 1).font = { bold: true };
+    worksheet.getRow(12).font = { bold: true };
+    worksheet.getRow(16 + todasTarjetas.length).font = { bold: true };
+    worksheet.getRow(17 + todasTarjetas.length).font = { bold: true };
+    worksheet.getRow(17 + todasTarjetas.length + movimientos.length + 1).font = { bold: true };
+    worksheet.getRow(20 + todasTarjetas.length + movimientos.length + 1).font = { bold: true };
     
 
     // Guardar el archivo

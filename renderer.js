@@ -15,6 +15,9 @@ const tablaMovimientos = document.getElementById('tablaMovimientos');
 const totalEfectivoEnCaja = document.getElementById('totalEfectivoEnCaja');
 const periodo = document.getElementById('periodo');
 const nombreFarmacia = document.getElementById('nombreFarmacia');
+const totalRecibosEfectivo = document.getElementById('totalRecibosEfectivo');
+const totalRecibosTarjetas = document.getElementById('totalRecibosTarjetas');
+
 
 // Función para formatear números como moneda
 function formatearMoneda(valor) {
@@ -43,7 +46,7 @@ function actualizarTablaTarjetas(tarjetas) {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${tarjeta.DESCRIPCION.trim()}</td>
-      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${formatearMoneda(tarjeta.NETO)}</td>
+      <td class="px-6 py-4 print:py-1 whitespace-nowrap text-sm print:text-xs text-gray-900">${formatearMoneda(tarjeta.TOTAL_CON_RECIBOS)}</td>
     `;
     tablaTarjetas.appendChild(row);
   });
@@ -119,6 +122,8 @@ async function cargarDatos() {
     const totalEfectivoVal = datos.totales?.TOTAL_EFECTIVO ?? 0;
     const totalCtaCteVal = datos.totales?.TOTAL_CTACTE ?? 0;
     const totalTarjetasVal = datos.totales?.TOTAL_TARJETAS ?? 0;
+    const totalRecibosEfectivoVal = datos.totales?.TOTAL_RECIBOS_EFECTIVO ?? 0;
+    const totalRecibosTarjetasVal = datos.totales?.TOTAL_RECIBOS_TARJETAS ?? 0;
     const totalRecibosVal = datos.totales?.TOTAL_RECIBOS ?? 0;
     const totalMovCaja = datos.movimientos?.[datos.movimientos.length - 1]?.TOTAL_GENERAL ?? 0;
 
@@ -126,8 +131,10 @@ async function cargarDatos() {
     totalEfectivo.textContent = formatearMoneda(totalEfectivoVal);
     totalCtaCte.textContent = formatearMoneda(totalCtaCteVal);
     totalTarjetas.textContent = formatearMoneda(totalTarjetasVal);
+    totalRecibosEfectivo.textContent = formatearMoneda(totalRecibosEfectivoVal);
+    totalRecibosTarjetas.textContent = formatearMoneda(totalRecibosTarjetasVal);
     totalRecibos.textContent = formatearMoneda(totalRecibosVal);
-    totalEfectivoEnCaja.textContent = formatearMoneda(totalEfectivoVal + totalRecibosVal + totalMovCaja);
+    totalEfectivoEnCaja.textContent = formatearMoneda(totalEfectivoVal + totalRecibosEfectivoVal + totalMovCaja);
 
     // Actualizar tablas
     actualizarTablaTarjetas(datos.tarjetas ?? []);

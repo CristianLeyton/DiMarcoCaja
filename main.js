@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const Firebird = require('node-firebird');
 const XLSX = require('xlsx');
@@ -6,16 +6,34 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 
 
-const options = {
-  host: '127.0.0.1',
-  port: 3050,
-  database: 'C:/winfarma/data/winfarma',
-  user: 'SYSDBA',
-  password: '.',
-  lowercase_keys: false,
-  role: null,
-  pageSize: 4096
-};
+// Ruta al config.json (dentro de userData para que funcione empaquetado)
+const configPath = path.join(app.getPath('userData'), 'config.json');
+
+let options;
+if (fs.existsSync(configPath)) {
+  options = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+} else {
+  // Si no existe, crea uno con valores por defecto
+  options = {
+    host: '127.0.0.1',
+    port: 3050,
+    database: 'C:/winfarma/data/winfarma',
+    user: 'SYSDBA',
+    password: '.',
+    pageSize: 4096
+  };
+  fs.writeFileSync(configPath, JSON.stringify(options, null, 2));
+}
+
+fs.watchFile(configPath, { interval: 1000 }, (curr, prev) => {
+  if (curr.mtime !== prev.mtime) {
+    console.log('Archivo de configuración modificado. Reiniciando la app...');
+    app.relaunch();
+    app.exit();
+  }
+});
+
+console.log('Config path:', configPath);
 
 let mainWindow;
 
@@ -35,21 +53,42 @@ function createWindow() {
       label: 'Archivo',
       submenu: [
         {
-          label: 'Reload',
+          label: 'Reiniciar',
           accelerator: 'CmdOrCtrl+R', // Puedes cambiar el atajo de teclado si lo deseas
           click: () => {
             mainWindow.reload();
           },
         },
         {
-          label: 'Exit',
+          label: 'Abrir configuración',
+          click: () => {
+            // Asegura que el archivo existe antes de abrirlo
+            if (!fs.existsSync(configPath)) {
+              const defaultConfig = {
+                host: '127.0.0.1',
+                port: 3050,
+                database: 'C:/winfarma/data/winfarma',
+                user: 'SYSDBA',
+                password: '.',
+                lowercase_keys: false,
+                role: null,
+                pageSize: 4096
+              };
+              fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+            }
+            // Abre el archivo con el editor predeterminado del sistema
+            shell.openPath(configPath);
+          }
+        },
+        {
+          label: 'Salir',
           accelerator: 'CmdOrCtrl+Q', // Puedes cambiar el atajo de teclado si lo deseas
           click: () => {
             app.quit();
           },
         },
-      ],
-    },
+      ]
+    }
   ]);
 
   // Cambiar el menú superior
@@ -263,7 +302,7 @@ ORDER BY m.FECHA ASC
     tarjetasRecibos.forEach(recibo => {
       const descripcion = recibo.DESCRIPCION.trim();
       const existente = tarjetas.find(t => t.DESCRIPCION === descripcion);
-    
+
       if (existente) {
         existente.TOTAL_CON_RECIBOS += recibo.TOTAL;
       } else {
@@ -459,33 +498,33 @@ ORDER BY m.FECHA ASC;
       TOTAL_RECIBOS: recibos[0]?.TOTAL_RECIBOS || 0
     };
 
-// Primero, actualizamos los datos de tarjetas con los recibos
-tarjetasRecibos.forEach(recibo => {
-  const descripcion = recibo.DESCRIPCION.trim();
-  const existente = tarjetas.find(t => t.DESCRIPCION.trim() === descripcion);
-  
-  if (existente) {
-    existente.TOTAL_CON_RECIBOS = (existente.TOTAL_CON_RECIBOS || existente.NETO) + recibo.TOTAL;
-  } else {
-    tarjetas.push({
-      TARJETA_ID: null,
-      DESCRIPCION: descripcion,
-      TOTAL_VENTAS: 0,
-      TOTAL_NC: 0,
-      NETO: 0,
-      TOTAL: 0,
-      TOTAL_CON_RECIBOS: recibo.TOTAL
-    });
-  }
-});
+    // Primero, actualizamos los datos de tarjetas con los recibos
+    tarjetasRecibos.forEach(recibo => {
+      const descripcion = recibo.DESCRIPCION.trim();
+      const existente = tarjetas.find(t => t.DESCRIPCION.trim() === descripcion);
 
-// Luego, generamos la lista final para imprimir
-const todasTarjetas = tarjetas.map(t => ({
-  ...t,
-  DESCRIPCION: t.DESCRIPCION.trim(),
-  TOTAL: t.NETO,
-  TOTAL_CON_RECIBOS: t.TOTAL_CON_RECIBOS ?? t.NETO
-}));
+      if (existente) {
+        existente.TOTAL_CON_RECIBOS = (existente.TOTAL_CON_RECIBOS || existente.NETO) + recibo.TOTAL;
+      } else {
+        tarjetas.push({
+          TARJETA_ID: null,
+          DESCRIPCION: descripcion,
+          TOTAL_VENTAS: 0,
+          TOTAL_NC: 0,
+          NETO: 0,
+          TOTAL: 0,
+          TOTAL_CON_RECIBOS: recibo.TOTAL
+        });
+      }
+    });
+
+    // Luego, generamos la lista final para imprimir
+    const todasTarjetas = tarjetas.map(t => ({
+      ...t,
+      DESCRIPCION: t.DESCRIPCION.trim(),
+      TOTAL: t.NETO,
+      TOTAL_CON_RECIBOS: t.TOTAL_CON_RECIBOS ?? t.NETO
+    }));
 
     // Crear el archivo Excel
     const workbook = new ExcelJS.Workbook();
@@ -560,7 +599,7 @@ const todasTarjetas = tarjetas.map(t => ({
 
     // Espacio
     worksheet.addRow([]);
-    worksheet.addRow([]);   
+    worksheet.addRow([]);
 
     // Suma de efectivo
     worksheet.addRow(['TOTAL EFECTIVO EN CAJA', '', formatearMoneda(totales.TOTAL_EFECTIVO + totales.TOTAL_RECIBOS_EFECTIVO + movimientos[movimientos.length - 1].TOTAL_GENERAL)], '');
@@ -574,7 +613,7 @@ const todasTarjetas = tarjetas.map(t => ({
     worksheet.getRow(17 + todasTarjetas.length).font = { bold: true };
     worksheet.getRow(17 + todasTarjetas.length + movimientos.length + 1).font = { bold: true };
     worksheet.getRow(20 + todasTarjetas.length + movimientos.length + 1).font = { bold: true };
-    
+
 
     // Guardar el archivo
     await workbook.xlsx.writeFile(filePath);

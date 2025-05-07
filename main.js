@@ -153,38 +153,27 @@ function formatearFecha(fecha) {
 ipcMain.handle('get-totales', async (event, { fechaInicio, fechaFin }) => {
   try {
     // Consulta para obtener totales de ventas, notas de crédito y recibos
-    const sqlVentas = `
-      WITH Ventas AS (
-        SELECT 
-          TOTALEFECTIVO,
-          TOTALCTACTE,
-          TOTALBRUTO,
-          FECHA,
-          ESTADO
-        FROM FAC_MAESTRO
-        WHERE FECHA BETWEEN ? AND ?
-        AND ESTADO = 0
-      ),
-      NotasCredito AS (
-        SELECT 
-          -TOTALEFECTIVO as TOTALEFECTIVO,
-          -TOTALCTACTE as TOTALCTACTE,
-          -TOTALIMPORTE as TOTALBRUTO,
-          FECHA,
-          ESTADO
-        FROM CRED_MAESTRO
-        WHERE FECHA BETWEEN ? AND ?
-        AND ESTADO = 0
-      )
-      SELECT 
-        COALESCE(SUM(TOTALEFECTIVO), 0) as TOTAL_EFECTIVO,
-        COALESCE(SUM(TOTALCTACTE), 0) as TOTAL_CTACTE,
-        COALESCE(SUM(TOTALBRUTO - TOTALEFECTIVO - TOTALCTACTE), 0) as TOTAL_TARJETAS
-      FROM (
-        SELECT * FROM Ventas
-        UNION ALL
-        SELECT * FROM NotasCredito
-      ) f`;
+    const sqlVentas = `SELECT 
+  COALESCE(SUM(f.TOTALEFECTIVO), 0) AS TOTAL_EFECTIVO,
+  COALESCE(SUM(f.TOTALCTACTE), 0) AS TOTAL_CTACTE,
+  COALESCE(SUM(f.TOTALCUPONES), 0) AS TOTAL_TARJETAS
+FROM (
+  SELECT 
+    TOTALEFECTIVO, 
+    TOTALCTACTE, 
+    TOTALCUPONES
+  FROM FAC_MAESTRO
+  WHERE FECHA BETWEEN ? AND ? AND ESTADO = 0
+
+  UNION ALL
+
+  SELECT 
+    -TOTALEFECTIVO, 
+    -TOTALCTACTE, 
+    -TOTALCUPONES
+  FROM CRED_MAESTRO
+  WHERE FECHA BETWEEN ? AND ? AND ESTADO = 0
+) f;`;
 
     // Consulta separada para recibos
     const sqlRecibos = `
@@ -374,38 +363,27 @@ ipcMain.handle('exportar-excel', async (event, { fechaInicio, fechaFin }) => {
     if (!filePath) return;
 
     // Obtener los datos
-    const datos = await query(`
-      WITH Ventas AS (
-        SELECT 
-          TOTALEFECTIVO,
-          TOTALCTACTE,
-          TOTALBRUTO,
-          FECHA,
-          ESTADO
-        FROM FAC_MAESTRO
-        WHERE FECHA BETWEEN ? AND ?
-        AND ESTADO = 0
-      ),
-      NotasCredito AS (
-        SELECT 
-          -TOTALEFECTIVO as TOTALEFECTIVO,
-          -TOTALCTACTE as TOTALCTACTE,
-          -TOTALIMPORTE as TOTALBRUTO,
-          FECHA,
-          ESTADO
-        FROM CRED_MAESTRO
-        WHERE FECHA BETWEEN ? AND ?
-        AND ESTADO = 0
-      )
-      SELECT 
-        COALESCE(SUM(TOTALEFECTIVO), 0) as TOTAL_EFECTIVO,
-        COALESCE(SUM(TOTALCTACTE), 0) as TOTAL_CTACTE,
-        COALESCE(SUM(TOTALBRUTO - TOTALEFECTIVO - TOTALCTACTE), 0) as TOTAL_TARJETAS
-      FROM (
-        SELECT * FROM Ventas
-        UNION ALL
-        SELECT * FROM NotasCredito
-      ) f`, [fechaInicio, fechaFin, fechaInicio, fechaFin]);
+    const datos = await query(`SELECT 
+  COALESCE(SUM(f.TOTALEFECTIVO), 0) AS TOTAL_EFECTIVO,
+  COALESCE(SUM(f.TOTALCTACTE), 0) AS TOTAL_CTACTE,
+  COALESCE(SUM(f.TOTALCUPONES), 0) AS TOTAL_TARJETAS
+FROM (
+  SELECT 
+    TOTALEFECTIVO, 
+    TOTALCTACTE, 
+    TOTALCUPONES
+  FROM FAC_MAESTRO
+  WHERE FECHA BETWEEN ? AND ? AND ESTADO = 0
+
+  UNION ALL
+
+  SELECT 
+    -TOTALEFECTIVO, 
+    -TOTALCTACTE, 
+    -TOTALCUPONES
+  FROM CRED_MAESTRO
+  WHERE FECHA BETWEEN ? AND ? AND ESTADO = 0
+) f;`, [fechaInicio, fechaFin, fechaInicio, fechaFin]);
 
     const recibos = await query(`
       SELECT 
